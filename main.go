@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -25,7 +26,70 @@ var blacklistedCommands = []string{
 	"rm -rf *",
 }
 
+type sshConn struct {
+	client   *ssh.Client
+	lastUsed time.Time
+}
+
+type sshPool struct {
+	mu    sync.Mutex
+	conns map[string]*sshConn
+}
+
+var pool = &sshPool{
+	conns: make(map[string]*sshConn),
+}
+
+func (p *sshPool) getConnection(user, host, port string, config *ssh.ClientConfig) (*ssh.Client, error) {
+	key := fmt.Sprintf("%s@%s:%s", user, host, port)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if conn, ok := p.conns[key]; ok {
+		// 检查连接是否仍然存活
+		_, _, err := conn.client.SendRequest("keepalive@openssh.com", true, nil)
+		if err == nil {
+			conn.lastUsed = time.Now()
+			return conn.client, nil
+		}
+		// 连接已断开，关闭并移除
+		conn.client.Close()
+		delete(p.conns, key)
+	}
+
+	// 建立新连接
+	addr := net.JoinHostPort(host, port)
+	client, err := ssh.Dial("tcp", addr, config)
+	if err != nil {
+		return nil, err
+	}
+
+	p.conns[key] = &sshConn{
+		client:   client,
+		lastUsed: time.Now(),
+	}
+	return client, nil
+}
+
+func (p *sshPool) cleanupIdle() {
+	for {
+		time.Sleep(1 * time.Minute)
+		p.mu.Lock()
+		now := time.Now()
+		for key, conn := range p.conns {
+			if now.Sub(conn.lastUsed) > 5*time.Minute {
+				conn.client.Close()
+				delete(p.conns, key)
+			}
+		}
+		p.mu.Unlock()
+	}
+}
+
 func main() {
+	// 启动清理协程
+	go pool.cleanupIdle()
+
 	// 创建新的 MCP 服务器
 	s := server.NewMCPServer(
 		"SSH Command Server",
@@ -35,7 +99,7 @@ func main() {
 
 	// 定义 ssh_execute 工具
 	sshTool := mcp.NewTool("ssh_execute",
-		mcp.WithDescription("在远程计算机上执行 SSH 命令"),
+		mcp.WithDescription("在远程计算机上执行 SSH 命令 (支持连接池)"),
 		mcp.WithString("host",
 			mcp.Required(),
 			mcp.Description("远程主机地址 (例如: 127.0.0.1)"),
@@ -111,13 +175,11 @@ func sshExecuteHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 		Timeout:         10 * time.Second,
 	}
 
-	// 建立连接
-	addr := net.JoinHostPort(host, port)
-	client, err := ssh.Dial("tcp", addr, config)
+	// 从池中获取连接
+	client, err := pool.getConnection(user, host, port, config)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to dial: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to connect: %v", err)), nil
 	}
-	defer client.Close()
 
 	// 创建会话
 	session, err := client.NewSession()
