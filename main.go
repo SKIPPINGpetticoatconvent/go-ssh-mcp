@@ -118,6 +118,9 @@ func main() {
 		mcp.WithString("privateKey",
 			mcp.Description("SSH 私钥内容 (PEM 格式)"),
 		),
+		mcp.WithString("workingDir",
+			mcp.Description("执行命令的工作目录 (例如: /etc)"),
+		),
 		mcp.WithString("command",
 			mcp.Required(),
 			mcp.Description("要执行的命令"),
@@ -139,14 +142,22 @@ func sshExecuteHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 	user := request.GetString("user", "")
 	password := request.GetString("password", "")
 	privateKey := request.GetString("privateKey", "")
+	workingDir := request.GetString("workingDir", "")
 	command := request.GetString("command", "")
 
 	if host == "" || user == "" || command == "" {
 		return mcp.NewToolResultError("host, user, and command are required parameters"), nil
 	}
 
-	// 命令黑名单检查
-	lowerCommand := strings.ToLower(command)
+	// 拼接工作目录切换逻辑
+	finalCommand := command
+	if workingDir != "" {
+		// 使用 cd 切换目录后再执行命令
+		finalCommand = fmt.Sprintf("cd %s && %s", workingDir, command)
+	}
+
+	// 命令黑名单检查 (针对拼接后的最终命令)
+	lowerCommand := strings.ToLower(finalCommand)
 	for _, restricted := range blacklistedCommands {
 		if strings.Contains(lowerCommand, strings.ToLower(restricted)) {
 			return mcp.NewToolResultError(fmt.Sprintf("Security Alert: The command contains restricted pattern '%s'. This operation is blocked for safety.", restricted)), nil
@@ -188,8 +199,8 @@ func sshExecuteHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 	}
 	defer session.Close()
 
-	// 执行命令并获取输出
-	output, err := session.CombinedOutput(command)
+	// 执行最终拼接的命令并获取输出
+	output, err := session.CombinedOutput(finalCommand)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Command execution failed: %v\nOutput: %s", err, string(output))), nil
 	}
