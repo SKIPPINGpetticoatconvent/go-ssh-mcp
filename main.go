@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"strings"
@@ -71,6 +73,16 @@ func (p *sshPool) getConnection(user, host, port string, config *ssh.ClientConfi
 	return client, nil
 }
 
+func (p *sshPool) removeConnection(user, host, port string) {
+	key := fmt.Sprintf("%s@%s:%s", user, host, port)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if conn, ok := p.conns[key]; ok {
+		conn.client.Close()
+		delete(p.conns, key)
+	}
+}
+
 func (p *sshPool) cleanupIdle() {
 	for {
 		time.Sleep(1 * time.Minute)
@@ -99,7 +111,7 @@ func main() {
 
 	// 定义 ssh_execute 工具
 	sshTool := mcp.NewTool("ssh_execute",
-		mcp.WithDescription("在远程计算机上执行 SSH 命令 (支持连接池)"),
+		mcp.WithDescription("在远程计算机上执行 SSH 命令 (支持连接池、PTY 及自动重连)"),
 		mcp.WithString("host",
 			mcp.Required(),
 			mcp.Description("远程主机地址 (例如: 127.0.0.1)"),
@@ -156,7 +168,6 @@ func sshExecuteHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 	// 拼接工作目录切换逻辑
 	finalCommand := command
 	if workingDir != "" {
-		// 使用 cd 切换目录后再执行命令
 		finalCommand = fmt.Sprintf("cd %s && %s", workingDir, command)
 	}
 
@@ -164,12 +175,11 @@ func sshExecuteHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 	lowerCommand := strings.ToLower(finalCommand)
 	for _, restricted := range blacklistedCommands {
 		if strings.Contains(lowerCommand, strings.ToLower(restricted)) {
-			return mcp.NewToolResultError(fmt.Sprintf("Security Alert: The command contains restricted pattern '%s'. This operation is blocked for safety.", restricted)), nil
+			return mcp.NewToolResultError(fmt.Sprintf("[SECURITY_ERROR] The command contains restricted pattern '%s'. This operation is blocked for safety.", restricted)), nil
 		}
 	}
 
 	var authMethods []ssh.AuthMethod
-
 	if privateKey != "" {
 		signer, err := ssh.ParsePrivateKey([]byte(privateKey))
 		if err != nil {
@@ -182,7 +192,6 @@ func sshExecuteHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 		return mcp.NewToolResultError("Either password or privateKey must be provided"), nil
 	}
 
-	// SSH 客户端配置
 	config := &ssh.ClientConfig{
 		User:            user,
 		Auth:            authMethods,
@@ -190,36 +199,66 @@ func sshExecuteHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 		Timeout:         10 * time.Second,
 	}
 
-	// 从池中获取连接
-	client, err := pool.getConnection(user, host, port, config)
+	stdout, stderr, err := runWithRetry(user, host, port, config, finalCommand, usePty)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to connect: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("SSH Error: %v\nStderr: %s", err, stderr)), nil
 	}
 
-	// 创建会话
+	// 增强型文件感知: 自动截断过大的输出 (针对日志等场景优化)
+	const maxOutputSize = 2000
+	if len(stdout) > maxOutputSize {
+		stdout = fmt.Sprintf("[Output Truncated: Only showing the last %d bytes for performance reasons]\n%s",
+			maxOutputSize, stdout[len(stdout)-maxOutputSize:])
+	}
+
+	resultText := stdout
+	if stderr != "" {
+		resultText = fmt.Sprintf("Standard Output:\n%s\n\nStandard Error:\n%s", stdout, stderr)
+	}
+
+	return mcp.NewToolResultText(resultText), nil
+}
+
+func runWithRetry(user, host, port string, config *ssh.ClientConfig, command string, usePty bool) (string, string, error) {
+	stdout, stderr, err := executeCommand(user, host, port, config, command, usePty)
+	if err != nil {
+		// 检查是否为连接错误（EOF 或 broken pipe 或 handshake failed 可能是因为连接坏了）
+		if err == io.EOF || strings.Contains(err.Error(), "broken pipe") || strings.Contains(err.Error(), "handshake failed") {
+			// 强制从池中移除连接并重试一次
+			pool.removeConnection(user, host, port)
+			return executeCommand(user, host, port, config, command, usePty)
+		}
+	}
+	return stdout, stderr, err
+}
+
+func executeCommand(user, host, port string, config *ssh.ClientConfig, command string, usePty bool) (string, string, error) {
+	client, err := pool.getConnection(user, host, port, config)
+	if err != nil {
+		return "", "", err
+	}
+
 	session, err := client.NewSession()
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to create session: %v", err)), nil
+		return "", "", err
 	}
 	defer session.Close()
 
+	var stdoutBuf, stderrBuf bytes.Buffer
+	session.Stdout = &stdoutBuf
+	session.Stderr = &stderrBuf
+
 	if usePty {
-		// 请求伪终端
 		modes := ssh.TerminalModes{
-			ssh.ECHO:          0,     // 禁用回显
-			ssh.TTY_OP_ISPEED: 14400, // 输入速度
-			ssh.TTY_OP_OSPEED: 14400, // 输出速度
+			ssh.ECHO:          0,
+			ssh.TTY_OP_ISPEED: 14400,
+			ssh.TTY_OP_OSPEED: 14400,
 		}
 		if err := session.RequestPty("xterm", 80, 40, modes); err != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Failed to request pty: %v", err)), nil
+			return "", "", fmt.Errorf("failed to request pty: %w", err)
 		}
 	}
 
-	// 执行最终拼接的命令并获取输出
-	output, err := session.CombinedOutput(finalCommand)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Command execution failed: %v\nOutput: %s", err, string(output))), nil
-	}
-
-	return mcp.NewToolResultText(string(output)), nil
+	err = session.Run(command)
+	return stdoutBuf.String(), stderrBuf.String(), err
 }
