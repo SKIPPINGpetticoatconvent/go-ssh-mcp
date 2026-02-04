@@ -5,12 +5,25 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"golang.org/x/crypto/ssh"
 )
+
+var blacklistedCommands = []string{
+	"rm -rf /",
+	"mkfs",
+	"shutdown",
+	"reboot",
+	"init 0",
+	"init 6",
+	"dd if=",
+	":(){ :|:& };:",
+	"rm -rf *",
+}
 
 func main() {
 	// 创建新的 MCP 服务器
@@ -66,6 +79,14 @@ func sshExecuteHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 
 	if host == "" || user == "" || command == "" {
 		return mcp.NewToolResultError("host, user, and command are required parameters"), nil
+	}
+
+	// 命令黑名单检查
+	lowerCommand := strings.ToLower(command)
+	for _, restricted := range blacklistedCommands {
+		if strings.Contains(lowerCommand, strings.ToLower(restricted)) {
+			return mcp.NewToolResultError(fmt.Sprintf("Security Alert: The command contains restricted pattern '%s'. This operation is blocked for safety.", restricted)), nil
+		}
 	}
 
 	var authMethods []ssh.AuthMethod
