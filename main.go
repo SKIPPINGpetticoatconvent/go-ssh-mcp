@@ -121,6 +121,9 @@ func main() {
 		mcp.WithString("workingDir",
 			mcp.Description("执行命令的工作目录 (例如: /etc)"),
 		),
+		mcp.WithBoolean("usePty",
+			mcp.Description("是否启用 PTY 伪终端 (用于执行 top, htop 等交互式命令)"),
+		),
 		mcp.WithString("command",
 			mcp.Required(),
 			mcp.Description("要执行的命令"),
@@ -143,6 +146,7 @@ func sshExecuteHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 	password := request.GetString("password", "")
 	privateKey := request.GetString("privateKey", "")
 	workingDir := request.GetString("workingDir", "")
+	usePty := request.GetBool("usePty", false)
 	command := request.GetString("command", "")
 
 	if host == "" || user == "" || command == "" {
@@ -198,6 +202,18 @@ func sshExecuteHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.C
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to create session: %v", err)), nil
 	}
 	defer session.Close()
+
+	if usePty {
+		// 请求伪终端
+		modes := ssh.TerminalModes{
+			ssh.ECHO:          0,     // 禁用回显
+			ssh.TTY_OP_ISPEED: 14400, // 输入速度
+			ssh.TTY_OP_OSPEED: 14400, // 输出速度
+		}
+		if err := session.RequestPty("xterm", 80, 40, modes); err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to request pty: %v", err)), nil
+		}
+	}
 
 	// 执行最终拼接的命令并获取输出
 	output, err := session.CombinedOutput(finalCommand)
