@@ -1,0 +1,86 @@
+name: Release
+
+on:
+    push:
+        branches:
+            - main
+        paths:
+            - "version.go"
+    workflow_dispatch:
+
+permissions:
+    contents: write
+
+jobs:
+    build-and-release:
+        name: Build and Release
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Get Version
+              id: get_version
+              run: |
+                  VERSION=$(grep 'const Version =' version.go | sed -E 's/.*"([^"]+)".*/\1/')
+                  echo "Detected version: $VERSION"
+                  echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+            - name: Check if tag exists
+              id: check_tag
+              run: |
+                  if git rev-parse "v${{ env.VERSION }}" >/dev/null 2>&1; then
+                    echo "Tag v${{ env.VERSION }} already exists."
+                    echo "exists=true" >> $GITHUB_OUTPUT
+                  else
+                    echo "Tag v${{ env.VERSION }} does not exist. Proceeding with release."
+                    echo "exists=false" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Set up Go
+              if: steps.check_tag.outputs.exists == 'false'
+              uses: actions/setup-go@v5
+              with:
+                  go-version: "1.22"
+
+            - name: Build Binaries
+              if: steps.check_tag.outputs.exists == 'false'
+              run: |
+                  mkdir -p dist
+
+                  # Linux x86_64
+                  echo "Building Linux x86_64..."
+                  GOOS=linux GOARCH=amd64 go build -o dist/ssh-mcp main.go version.go
+                  tar -czf dist/go-ssh-mcp_Linux_x86_64.tar.gz -C dist ssh-mcp
+                  rm dist/ssh-mcp
+
+                  # Linux arm64
+                  echo "Building Linux arm64..."
+                  GOOS=linux GOARCH=arm64 go build -o dist/ssh-mcp main.go version.go
+                  tar -czf dist/go-ssh-mcp_Linux_arm64.tar.gz -C dist ssh-mcp
+                  rm dist/ssh-mcp
+
+                  # macOS x86_64
+                  echo "Building Darwin x86_64..."
+                  GOOS=darwin GOARCH=amd64 go build -o dist/ssh-mcp main.go version.go
+                  tar -czf dist/go-ssh-mcp_Darwin_x86_64.tar.gz -C dist ssh-mcp
+                  rm dist/ssh-mcp
+
+                  # macOS arm64
+                  echo "Building Darwin arm64..."
+                  GOOS=darwin GOARCH=arm64 go build -o dist/ssh-mcp main.go version.go
+                  tar -czf dist/go-ssh-mcp_Darwin_arm64.tar.gz -C dist ssh-mcp
+                  rm dist/ssh-mcp
+
+            - name: Create Release
+              if: steps.check_tag.outputs.exists == 'false'
+              uses: softprops/action-gh-release@v1
+              with:
+                  tag_name: v${{ env.VERSION }}
+                  name: Release v${{ env.VERSION }}
+                  draft: false
+                  prerelease: false
+                  files: dist/*.tar.gz
+                  generate_release_notes: true

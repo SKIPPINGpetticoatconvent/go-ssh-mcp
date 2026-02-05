@@ -64,6 +64,11 @@ SSH MCP Server 是一个生产就绪的 [Model Context Protocol (MCP)](https://m
 
 ## 📦 安装
 
+### 一键安装
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/SKIPPINGpetticoatconvent/go-ssh-mcp/raw/main/tools/ssh-mcp-installer.sh | sh
+```
+
 ### 从源码编译
 
 ```bash

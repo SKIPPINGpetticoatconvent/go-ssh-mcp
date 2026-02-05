@@ -64,6 +64,11 @@ SSH MCP Server is a production-ready [Model Context Protocol (MCP)](https://mode
 
 ## 📦 Installation
 
+### One-Line Install
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/SKIPPINGpetticoatconvent/go-ssh-mcp/raw/main/tools/ssh-mcp-installer.sh | sh
+```
+
 ### Build from Source
 
 ```bash
