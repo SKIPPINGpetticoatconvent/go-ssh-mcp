@@ -70,11 +70,15 @@ SSH MCP Server 是一个生产就绪的 [Model Context Protocol (MCP)](https://m
 go build -o ssh-mcp main.go
 ```
 
+> 二进制文件将生成在当前目录：`./ssh-mcp`
+
 ### Go Install
 
 ```bash
 go install github.com/SKIPPINGpetticoatconvent/go-ssh-mcp@latest
 ```
+
+> 二进制文件将安装到 `$GOPATH/bin/go-ssh-mcp` (默认为 `~/go/bin/go-ssh-mcp`)
 
 ---
 
@@ -88,11 +92,13 @@ go install github.com/SKIPPINGpetticoatconvent/go-ssh-mcp@latest
 {
   "mcpServers": {
     "ssh": {
-      "command": "/path/to/ssh-mcp"
+      "command": "/home/your-user/go/bin/go-ssh-mcp"
     }
   }
 }
 ```
+
+> 💡 如通过 `go install` 安装使用 `~/go/bin/go-ssh-mcp`，如从源码编译则使用本地路径
 
 > 📍 配置文件位置：
 > - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -102,14 +108,14 @@ go install github.com/SKIPPINGpetticoatconvent/go-ssh-mcp@latest
 ### VS Code
 
 ```bash
-code --add-mcp '{"name":"ssh","command":"/path/to/ssh-mcp"}'
+code --add-mcp '{"name":"ssh","command":"/home/your-user/go-ssh-mcp/ssh-mcp"}'
 ```
 
 ### Cursor
 
 1. 打开 **Settings** → **MCP** → **Add new MCP Server**
 2. 选择 **Command** 类型
-3. 输入: `/path/to/ssh-mcp`
+3. 输入: `/home/your-user/go-ssh-mcp/ssh-mcp`
 
 ### Windsurf / Cline
 
@@ -119,7 +125,7 @@ code --add-mcp '{"name":"ssh","command":"/path/to/ssh-mcp"}'
 {
   "mcpServers": {
     "ssh": {
-      "command": "/path/to/ssh-mcp"
+      "command": "/home/your-user/go-ssh-mcp/ssh-mcp"
     }
   }
 }

@@ -70,11 +70,15 @@ SSH MCP Server is a production-ready [Model Context Protocol (MCP)](https://mode
 go build -o ssh-mcp main.go
 ```
 
+> Binary will be in the current directory: `./ssh-mcp`
+
 ### Go Install
 
 ```bash
 go install github.com/SKIPPINGpetticoatconvent/go-ssh-mcp@latest
 ```
+
+> Binary will be installed to `$GOPATH/bin/go-ssh-mcp` (typically `~/go/bin/go-ssh-mcp`)
 
 ---
 
@@ -88,11 +92,13 @@ Add to `claude_desktop_config.json`:
 {
   "mcpServers": {
     "ssh": {
-      "command": "/path/to/ssh-mcp"
+      "command": "/home/your-user/go/bin/go-ssh-mcp"
     }
   }
 }
 ```
+
+> 💡 Use `~/go/bin/go-ssh-mcp` if installed via `go install`, or the local path if built from source
 
 > 📍 Config file locations:
 > - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -102,14 +108,14 @@ Add to `claude_desktop_config.json`:
 ### VS Code
 
 ```bash
-code --add-mcp '{"name":"ssh","command":"/path/to/ssh-mcp"}'
+code --add-mcp '{"name":"ssh","command":"/home/your-user/go-ssh-mcp/ssh-mcp"}'
 ```
 
 ### Cursor
 
 1. Open **Settings** → **MCP** → **Add new MCP Server**
 2. Select **Command** type
-3. Enter: `/path/to/ssh-mcp`
+3. Enter: `/home/your-user/go-ssh-mcp/ssh-mcp`
 
 ### Windsurf / Cline
 
@@ -119,7 +125,7 @@ Add to your MCP config:
 {
   "mcpServers": {
     "ssh": {
-      "command": "/path/to/ssh-mcp"
+      "command": "/home/your-user/go-ssh-mcp/ssh-mcp"
     }
   }
 }
