@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -103,13 +104,23 @@ func (p *sshPool) cleanupIdle() {
 }
 
 func main() {
+	// 解析命令行参数
+	versionFlag := flag.Bool("v", false, "Print version and exit")
+	showVersion := flag.Bool("version", false, "Print version and exit")
+	flag.Parse()
+
+	if *versionFlag || *showVersion {
+		fmt.Println(Version)
+		return
+	}
+
 	// 启动清理协程
 	go pool.cleanupIdle()
 
 	// 创建新的 MCP 服务器
 	s := server.NewMCPServer(
 		"SSH Command Server",
-		"1.0.0",
+		Version,
 		server.WithToolCapabilities(true),
 	)
 
