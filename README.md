@@ -190,13 +190,53 @@ Linux server 5.15.0-generic #1 SMP x86_64 GNU/Linux
 }
 ```
 
+### Upload File to Remote Server
+
+```json
+{
+  "host": "192.168.1.100",
+  "port": "22",
+  "user": "admin",
+  "password": "your-password",
+  "localPath": "/home/user/config.json",
+  "remotePath": "/etc/app/config.json",
+  "overwrite": true
+}
+```
+
+### Download File from Remote Server
+
+```json
+{
+  "host": "192.168.1.100",
+  "port": "22",
+  "user": "admin",
+  "password": "your-password",
+  "remotePath": "/var/log/app.log",
+  "localPath": "/tmp/app.log"
+}
+```
+
+### Upload Base64 Content
+
+```json
+{
+  "host": "192.168.1.100",
+  "port": "22",
+  "user": "admin",
+  "password": "your-password",
+  "content": "SGVsbG8gV29ybGQh",
+  "remotePath": "/tmp/hello.txt"
+}
+```
+
 ---
 
 ## 📖 API Reference
 
 ### `ssh_execute` Tool
 
-The single tool that handles all SSH operations.
+Execute commands on remote servers via SSH.
 
 #### Parameters
 
@@ -211,7 +251,46 @@ The single tool that handles all SSH operations.
 | `workingDir` | string | ❌ | Working directory for the command |
 | `usePty` | boolean | ❌ | Enable PTY for interactive commands |
 
-> ⚠️ **Note:** Either `password` or `privateKey` must be provided.
+---
+
+### `scp_upload` Tool
+
+Upload files to remote servers via SFTP protocol.
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `host` | string | ✅ | Remote host address |
+| `port` | string | ✅ | SSH port (default: `22`) |
+| `user` | string | ✅ | Remote username |
+| `password` | string | ❌ | SSH password |
+| `privateKey` | string | ❌ | SSH private key (PEM format) |
+| `localPath` | string | ❌ | Local file path (one of `localPath` or `content` required) |
+| `content` | string | ❌ | Base64-encoded file content |
+| `remotePath` | string | ✅ | Remote destination path |
+| `overwrite` | boolean | ❌ | Overwrite existing file (default: `false`) |
+
+---
+
+### `scp_download` Tool
+
+Download files from remote servers via SFTP protocol.
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `host` | string | ✅ | Remote host address |
+| `port` | string | ✅ | SSH port (default: `22`) |
+| `user` | string | ✅ | Remote username |
+| `password` | string | ❌ | SSH password |
+| `privateKey` | string | ❌ | SSH private key (PEM format) |
+| `remotePath` | string | ✅ | Remote file path |
+| `localPath` | string | ❌ | Local save path (optional, returns Base64 if not provided) |
+| `maxSize` | number | ❌ | Maximum download size in bytes (default: 10MB) |
+
+> ⚠️ **Note:** Either `password` or `privateKey` must be provided for all tools.
 
 ---
 
@@ -331,9 +410,9 @@ The following dangerous commands are blocked by default:
 - [x] Command blacklisting
 - [x] Dual authentication (password/key)
 - [x] Working directory support
+- [x] **SCP/SFTP file upload/download**
 
 ### 🚀 Planned
-- [ ] SCP file upload/download
 - [ ] Port forwarding (tunneling)
 - [ ] Multi-hop SSH (jump hosts)
 - [ ] Custom timeout configuration

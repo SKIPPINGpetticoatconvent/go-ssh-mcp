@@ -190,13 +190,53 @@ Linux server 5.15.0-generic #1 SMP x86_64 GNU/Linux
 }
 ```
 
+### 上传文件到远程服务器
+
+```json
+{
+  "host": "192.168.1.100",
+  "port": "22",
+  "user": "admin",
+  "password": "your-password",
+  "localPath": "/home/user/config.json",
+  "remotePath": "/etc/app/config.json",
+  "overwrite": true
+}
+```
+
+### 从远程服务器下载文件
+
+```json
+{
+  "host": "192.168.1.100",
+  "port": "22",
+  "user": "admin",
+  "password": "your-password",
+  "remotePath": "/var/log/app.log",
+  "localPath": "/tmp/app.log"
+}
+```
+
+### 上传 Base64 内容
+
+```json
+{
+  "host": "192.168.1.100",
+  "port": "22",
+  "user": "admin",
+  "password": "your-password",
+  "content": "SGVsbG8gV29ybGQh",
+  "remotePath": "/tmp/hello.txt"
+}
+```
+
 ---
 
 ## 📖 API 参考
 
 ### `ssh_execute` 工具
 
-处理所有 SSH 操作的统一工具。
+通过 SSH 在远程服务器上执行命令。
 
 #### 参数说明
 
@@ -211,7 +251,46 @@ Linux server 5.15.0-generic #1 SMP x86_64 GNU/Linux
 | `workingDir` | string | ❌ | 命令执行的工作目录 |
 | `usePty` | boolean | ❌ | 是否启用 PTY (用于交互式命令) |
 
-> ⚠️ **注意：** `password` 和 `privateKey` 必须提供其一。
+---
+
+### `scp_upload` 工具
+
+通过 SFTP 协议上传文件到远程服务器。
+
+#### 参数说明
+
+| 参数 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| `host` | string | ✅ | 远程主机地址 |
+| `port` | string | ✅ | SSH 端口 (默认: `22`) |
+| `user` | string | ✅ | 远程用户名 |
+| `password` | string | ❌ | SSH 密码 |
+| `privateKey` | string | ❌ | SSH 私钥 (PEM 格式) |
+| `localPath` | string | ❌ | 本地文件路径 (`localPath` 和 `content` 二选一) |
+| `content` | string | ❌ | Base64 编码的文件内容 |
+| `remotePath` | string | ✅ | 远程目标路径 |
+| `overwrite` | boolean | ❌ | 是否覆盖已存在的文件 (默认: `false`) |
+
+---
+
+### `scp_download` 工具
+
+通过 SFTP 协议从远程服务器下载文件。
+
+#### 参数说明
+
+| 参数 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| `host` | string | ✅ | 远程主机地址 |
+| `port` | string | ✅ | SSH 端口 (默认: `22`) |
+| `user` | string | ✅ | 远程用户名 |
+| `password` | string | ❌ | SSH 密码 |
+| `privateKey` | string | ❌ | SSH 私钥 (PEM 格式) |
+| `remotePath` | string | ✅ | 远程文件路径 |
+| `localPath` | string | ❌ | 本地保存路径 (不提供则返回 Base64 内容) |
+| `maxSize` | number | ❌ | 最大下载大小 (字节，默认: 10MB) |
+
+> ⚠️ **注意：** 所有工具均需提供 `password` 或 `privateKey` 其一。
 
 ---
 
@@ -331,9 +410,9 @@ Linux server 5.15.0-generic #1 SMP x86_64 GNU/Linux
 - [x] 命令黑名单安全过滤
 - [x] 双重认证 (密码/私钥)
 - [x] 工作目录指定
+- [x] **SCP/SFTP 文件上传/下载**
 
 ### 🚀 计划中
-- [ ] SCP 文件上传/下载
 - [ ] 端口转发 (隧道)
 - [ ] 多跳 SSH (跳板机)
 - [ ] 自定义超时配置
