@@ -67,6 +67,8 @@ SSH MCP Server 是一个生产就绪的 [Model Context Protocol (MCP)](https://m
 ### 从源码编译
 
 ```bash
+git clone https://github.com/SKIPPINGpetticoatconvent/go-ssh-mcp.git
+cd go-ssh-mcp
 go build -o ssh-mcp main.go
 ```
 

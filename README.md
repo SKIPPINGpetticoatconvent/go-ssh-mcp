@@ -67,6 +67,8 @@ SSH MCP Server is a production-ready [Model Context Protocol (MCP)](https://mode
 ### Build from Source
 
 ```bash
+git clone https://github.com/SKIPPINGpetticoatconvent/go-ssh-mcp.git
+cd go-ssh-mcp
 go build -o ssh-mcp main.go
 ```
 
